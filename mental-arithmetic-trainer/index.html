@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>口算能力训练器 - 在线版</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', '微软雅黑', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 20px 24px 30px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+        .sub {
+            text-align: center;
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 0.9rem;
+        }
+        /* 设置区 */
+        .settings {
+            background: #f8f9ff;
+            border-radius: 16px;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-end;
+            border: 1px solid #e0e7ff;
+        }
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 120px;
+        }
+        .setting-group label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.85rem;
+        }
+        select, input {
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e0;
+            font-size: 0.9rem;
+            background: white;
+            cursor: pointer;
+        }
+        input[type="number"] {
+            width: 80px;
+        }
+        button {
+            background: #5a67d8;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.2s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        button:hover {
+            background: #4c51bf;
+            transform: scale(1.02);
+        }
+        .generate-btn {
+            background: #38a169;
+            font-size: 1rem;
+            padding: 8px 28px;
+        }
+        .generate-btn:hover {
+            background: #2f855a;
+        }
+        /* 题目区域 */
+        .questions-area {
+            max-height: 500px;
+            overflow-y: auto;
+            border-top: 1px solid #e2e8f0;
+            margin-top: 10px;
+            padding-top: 15px;
+        }
+        .question-item {
+            background: #fefefe;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            padding: 12px 15px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            transition: 0.1s;
+        }
+        .question-text {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #1a202c;
+            background: #edf2f7;
+            padding: 5px 14px;
+            border-radius: 40px;
+            min-width: 180px;
+        }
+        .answer-input {
+            width: 120px;
+            padding: 8px 12px;
+            font-size: 1rem;
+            border-radius: 30px;
+            border: 1px solid #cbd5e0;
+            text-align: center;
+        }
+        .badge {
+            font-size: 0.75rem;
+            background: #e2e8f0;
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: #2d3748;
+        }
+        .submit-area {
+            margin-top: 25px;
+            text-align: center;
+        }
+        .submit-btn {
+            background: #e53e3e;
+            padding: 12px 32px;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .submit-btn:hover {
+            background: #c53030;
+        }
+        .result {
+            margin-top: 20px;
+            background: #e6fffa;
+            border-radius: 16px;
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+            color: #234e52;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #c3dafe;
+            font-size: 0.8rem;
+        }
+        @media (max-width: 650px) {
+            .main-card {
+                padding: 15px;
+            }
+            .question-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .question-text {
+                text-align: center;
+            }
+            .answer-input {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="main-card">
+        <h1>🧠 口算能力训练器</h1>
+        <div class="sub">一次性生成多题 · 统一提交批改</div>
+
+        <div class="settings">
+            <div class="setting-group">
+                <label>📌 题型</label>
+                <select id="operator">
+                    <option value="add">加法 (+) </option>
+                    <option value="sub">减法 (-) </option>
+                    <option value="mul">乘法 (×) </option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>🔢 第一个数最多位数</label>
+                <input type="number" id="digits1" min="1" max="5" value="2">
+            </div>
+            <div class="setting-group">
+                <label>🔢 第二个数最多位数</label>
+                <input type="number" id="digits2" min="1" max="5" value="2">
+            </div>
+            <div class="setting-group">
+                <label>📋 题目数量</label>
+                <input type="number" id="questionCount" min="1" max="40" value="6">
+            </div>
+            <div class="setting-group">
+                <button id="generateBtn" class="generate-btn">✨ 生成题目</button>
+            </div>
+        </div>
+
+        <div id="questionsContainer" class="questions-area">
+            <div style="text-align:center; color:#a0aec0; padding: 40px;">⚡ 点击“生成题目”开始训练</div>
+        </div>
+
+        <div class="submit-area">
+            <button id="submitBtn" class="submit-btn">📝 提交并批改</button>
+        </div>
+        <div id="resultMsg" class="result" style="display: none;"></div>
+    </div>
+    <div class="footer">
+        随机生成 · 减法保证非负 · 专注提升工作记忆 🧩
+    </div>
+</div>
+
+<script>
+    // 存储当前题目列表
+    let currentQuestions = []; // 每个元素 { text, answer }
+
+    // DOM 元素
+    const operatorSelect = document.getElementById('operator');
+    const digits1Input = document.getElementById('digits1');
+    const digits2Input = document.getElementById('digits2');
+    const countInput = document.getElementById('questionCount');
+    const generateBtn = document.getElementById('generateBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const questionsContainer = document.getElementById('questionsContainer');
+    const resultDiv = document.getElementById('resultMsg');
+
+    // 辅助: 生成最多 maxDigits 位的随机整数 (1 ~ 10^maxDigits -1)
+    function randomNumberByDigits(maxDigits) {
+        if (maxDigits < 1) maxDigits = 1;
+        const min = maxDigits === 1 ? 1 : Math.pow(10, maxDigits - 1);
+        const max = Math.pow(10, maxDigits) - 1;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // 生成题目
+    function generateQuestions() {
+        const operator = operatorSelect.value;
+        let digits1 = parseInt(digits1Input.value, 10);
+        let digits2 = parseInt(digits2Input.value, 10);
+        let count = parseInt(countInput.value, 10);
+
+        // 合法性修正
+        if (isNaN(digits1) || digits1 < 1) digits1 = 1;
+        if (isNaN(digits2) || digits2 < 1) digits2 = 1;
+        if (isNaN(count) || count < 1) count = 5;
+        if (count > 40) count = 40;  // 避免界面过卡
+
+        const newQuestions = [];
+        for (let i = 0; i < count; i++) {
+            let num1 = randomNumberByDigits(digits1);
+            let num2 = randomNumberByDigits(digits2);
+
+            // 减法保证非负
+            if (operator === 'sub' && num1 < num2) {
+                [num1, num2] = [num2, num1];
+            }
+
+            let answer = 0;
+            let text = '';
+            if (operator === 'add') {
+                answer = num1 + num2;
+                text = `${num1} + ${num2} = ?`;
+            } else if (operator === 'sub') {
+                answer = num1 - num2;
+                text = `${num1} - ${num2} = ?`;
+            } else { // mul
+                answer = num1 * num2;
+                text = `${num1} × ${num2} = ?`;
+            }
+
+            newQuestions.push({
+                id: i,
+                text: text,
+                answer: answer
+            });
+        }
+
+        currentQuestions = newQuestions;
+        renderQuestions();
+        resultDiv.style.display = 'none';
+    }
+
+    // 渲染题目列表，生成输入框
+    function renderQuestions() {
+        if (!currentQuestions.length) {
+            questionsContainer.innerHTML = `<div style="text-align:center; color:#a0aec0; padding: 40px;">📭 暂无题目，点击“生成题目”</div>`;
+            return;
+        }
+
+        let html = '';
+        currentQuestions.forEach((q, idx) => {
+            html += `
+                <div class="question-item" data-idx="${idx}">
+                    <div class="question-text">${idx+1}.  ${q.text}</div>
+                    <input type="number" class="answer-input" id="answer_${idx}" placeholder="输入答案" step="1" value="">
+                    <span class="badge">第${idx+1}题</span>
+                </div>
+            `;
+        });
+        questionsContainer.innerHTML = html;
+    }
+
+    // 收集并批改
+    function checkAnswers() {
+        if (!currentQuestions.length) {
+            alert('⚠️ 请先生成题目！');
+            return;
+        }
+
+        let correctCount = 0;
+        const details = [];
+
+        for (let i = 0; i < currentQuestions.length; i++) {
+            const inputElem = document.getElementById(`answer_${i}`);
+            let userAnswerRaw = inputElem ? inputElem.value.trim() : '';
+            const correctAns = currentQuestions[i].answer;
+            const questionText = currentQuestions[i].text;
+
+            if (userAnswerRaw === "") {
+                details.push(`第${i+1}题 ❌ 未作答 (正确答案: ${correctAns})`);
+                continue;
+            }
+
+            const userAnswer = Number(userAnswerRaw);
+            if (isNaN(userAnswer)) {
+                details.push(`第${i+1}题 ❌ 输入无效 (正确答案: ${correctAns})`);
+            } else if (userAnswer === correctAns) {
+                correctCount++;
+                details.push(`第${i+1}题 ✅ 正确`);
+            } else {
+                details.push(`第${i+1}题 ❌ 错误   (你的答案: ${userAnswer} , 正确答案: ${correctAns})`);
+            }
+        }
+
+        const total = currentQuestions.length;
+        const score = (correctCount / total) * 100;
+        const summary = `🎉 得分: ${correctCount} / ${total}  (${score.toFixed(1)}分)`;
+
+        // 显示详细结果弹窗 (使用模态框类似效果，也可以直接用 alert 但为了美观用自定义div)
+        let detailHtml = `<strong>${summary}</strong><br><br>`;
+        detailHtml += details.map(d => `• ${d}`).join('<br>');
+        resultDiv.innerHTML = detailHtml;
+        resultDiv.style.display = 'block';
+
+        // 滚动到结果
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // 事件绑定
+    generateBtn.addEventListener('click', generateQuestions);
+    submitBtn.addEventListener('click', checkAnswers);
+
+    // 页面加载自动生成一组默认题目（方便体验）
+    window.addEventListener('DOMContentLoaded', () => {
+        generateQuestions();
+    });
+</script>
+</body>
+</html>
