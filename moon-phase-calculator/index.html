@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>中秋 · 月相</title>
+<meta name="description" content="选一个日期，看那天的月亮。月相是当场算出来的。">
+<style>
+/* 中秋月相页 · 样式（安静、信息密度高） */
+
+:root {
+  --bg-0: #070a12;
+  --bg-1: #0d1322;
+  --ink: #e9e7de;
+  --ink-dim: #9aa3b8;
+  --ink-faint: #757e92; /* 小字号提示色：在夜空底色上 4.55:1，满足 WCAG AA 正文标准 */
+  --moon: #f8f5ea;
+  --moon-warm: #e8d5aa;
+  --accent: #c9a961;
+  --line: rgba(200, 210, 230, 0.13);
+  --line-strong: rgba(200, 210, 230, 0.26);
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+  --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  --page-pad-y: clamp(18px, 3.4vw, 52px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-0);
+  color: var(--ink);
+  font-family: var(--serif);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body { overflow: hidden; }
+
+/* ---------- 整页滚动 ---------- */
+.pages {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto; /* 内容万一超过一屏 → 页内滚动，绝不撑高整页
+                       （整页吸附按元素高度算吸附点：页面一变高，读者会被甩到别的页去） */
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  /* safe center：放得下就居中，放不下就按顶部对齐（普通 center 会把顶部裁掉、滚不到） */
+  justify-content: safe center;
+  padding: var(--page-pad-y) clamp(16px, 4vw, 64px);
+  background:
+    radial-gradient(1200px 700px at 22% 8%, rgba(60, 80, 130, 0.20), transparent 62%),
+    radial-gradient(900px 600px at 88% 92%, rgba(120, 96, 60, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1));
+}
+
+/* 星野（由 JS 生成，静态、微弱） */
+.stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.75; }
+.stars i {
+  position: absolute;
+  width: 2px; height: 2px;
+  border-radius: 50%;
+  background: #dfe6f5;
+  animation: twinkle 6s ease-in-out infinite;
+}
+@keyframes twinkle { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.75; } }
+
+.page > * { position: relative; z-index: 1; }
+
+/* ---------- 通用排版 ---------- */
+.eyebrow {
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0.34em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+h1.title {
+  font-size: clamp(26px, 4.6vw, 46px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+}
+
+.hint {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.12em;
+}
+
+/* ---------- 第一页：月相 ---------- */
+.p1-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.05fr);
+  gap: clamp(20px, 3.6vw, 68px);
+  align-items: center;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.moon-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.moon-svg { width: clamp(190px, 27vw, 340px); height: auto; overflow: visible; }
+.moon-svg .halo { filter: blur(14px); opacity: 0.55; }
+
+.moon-caption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-dim);
+  letter-spacing: 0.1em;
+}
+
+/* 日期栏 + 详情切换按钮 */
+.date-row { display: flex; gap: 10px; align-items: stretch; }
+.date-row .date-btn { flex: 1 1 auto; min-width: 0; }
+
+.toggle-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink-dim);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.toggle-btn:hover { color: var(--ink); border-color: var(--line-strong); background: rgba(255, 255, 255, 0.06); }
+.toggle-btn .ico { color: var(--ink-faint); font-size: 11px; }
+
+/* 内容面板：表盘 / 数值详情，二选一；等高，切换时不跳动 */
+.face {
+  margin-top: 14px;
+  min-height: clamp(212px, 25vh, 280px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.face[hidden] { display: none; }
+
+/* 时针钟表：一天一圈 = 24 小时，拖过顶点日期跟着变 */
+#faceClock { align-items: center; gap: 10px; }
+.clock { width: clamp(150px, 16vw, 232px); height: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.clock:active { cursor: grabbing; }
+.clock:focus-visible { outline: none; }
+.clock:focus-visible .clock-face { stroke: var(--moon-warm); }
+.clock-face { fill: rgba(255, 255, 255, 0.03); stroke: var(--line); stroke-width: 0.7; }
+.clock-ticks line { stroke: rgba(200, 210, 230, 0.22); stroke-width: 0.55; }
+.clock-ticks line.major { stroke: rgba(200, 210, 230, 0.5); stroke-width: 1; }
+.clock-hand { stroke: var(--moon-warm); stroke-width: 1.7; stroke-linecap: round; }
+.clock-pin { fill: var(--moon-warm); }
+.clock-label { font-family: var(--sans); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.05em; display: flex; gap: 7px; align-items: baseline; white-space: nowrap; }
+.clock-label #clockHint { color: var(--ink-faint); font-size: 12px; }
+.clock-tip { margin: 0; font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); letter-spacing: 0.05em; text-align: center; line-height: 1.7; }
+
+/* 日期按钮（点击展开日历） */
+.date-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: clamp(19px, 2.4vw, 25px);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+  text-align: left;
+  width: 100%;
+}
+.date-btn:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.06); }
+.date-btn .caret { font-size: 12px; color: var(--ink-faint); margin-left: auto; }
+.date-btn .phase-tag {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 0.16em;
+}
+
+/* 数字面板 */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 12px; }
+.stat { background: rgba(9, 13, 22, 0.72); padding: 12px 14px; }
+.stat .k { font-family: var(--sans); font-size: 11.5px; color: var(--ink-faint); letter-spacing: 0.14em; margin-bottom: 5px; }
+.stat .v { font-family: var(--sans); font-size: clamp(15px, 1.7vw, 18px); color: var(--ink); font-variant-numeric: tabular-nums; }
+.stat .v .unit { font-size: 12px; color: var(--ink-dim); margin-left: 3px; }
+.stat .v .sub { font-size: 12px; color: var(--ink-faint); margin-left: 6px; }
+.stat.wide { grid-column: 1 / -1; }
+
+.illum-bar { height: 3px; background: rgba(255, 255, 255, 0.09); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.illum-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--moon-warm), var(--moon)); border-radius: 2px; }
+
+.plain {
+  margin-top: 14px;
+  font-size: clamp(14px, 1.55vw, 16px);
+  line-height: 1.85;
+  color: var(--ink-dim);
+}
+.plain b { color: var(--ink); font-weight: 600; }
+
+.p1-foot {
+  max-width: 1180px;
+  margin: 22px auto 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+}
+.scroll-cue { display: inline-flex; align-items: center; gap: 8px; }
+.scroll-cue .arrow { display: inline-block; animation: bob 2.2s ease-in-out infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); opacity: 0.55; } 50% { transform: translateY(4px); opacity: 1; } }
+
+/* ---------- 日历弹层 ---------- */
+.cal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 5, 10, 0.62);
+  backdrop-filter: blur(3px);
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.cal-backdrop.open { display: flex; }
+
+.cal {
+  width: min(340px, 100%);
+  background: linear-gradient(180deg, #121a2b, #0d1322);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  padding: 14px;
+  font-family: var(--sans);
+}
+
+.cal-head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.cal-head .nav {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.cal-head .nav:hover { color: var(--ink); border-color: var(--line-strong); background: rgba(255, 255, 255, 0.05); }
+.cal-head .label {
+  flex: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  padding: 6px 8px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+.cal-head .label:hover { border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-grid.months { grid-template-columns: repeat(3, 1fr); }
+.cal-grid.years { grid-template-columns: repeat(4, 1fr); }
+.cal-grid.months .cal-cell, .cal-grid.years .cal-cell { aspect-ratio: 1.7 / 1; font-size: 13px; }
+.cal-grid .wd { font-size: 11px; color: var(--ink-faint); text-align: center; padding: 4px 0; letter-spacing: 0.06em; }
+.cal-cell {
+  aspect-ratio: 1 / 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.cal-cell:hover { background: rgba(255, 255, 255, 0.07); color: var(--ink); }
+.cal-cell.dim { color: var(--ink-faint); opacity: 0.78; }
+.cal-cell.today { border-color: var(--line-strong); color: var(--ink); }
+.cal-cell.sel { background: var(--moon); color: #0b1020; font-weight: 600; }
+.cal-cell.festival { position: relative; }
+.cal-cell.festival::after {
+  content: ""; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  width: 3px; height: 3px; border-radius: 50%; background: var(--accent);
+}
+.cal-cell.sel.festival::after { background: #0b1020; }
+
+.cal-foot { display: flex; gap: 8px; margin-top: 10px; }
+.cal-foot button {
+  flex: 1;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+}
+.cal-foot button:hover { color: var(--ink); border-color: var(--line-strong); }
+
+.cal-note { margin-top: 10px; font-size: 11.5px; color: var(--ink-faint); line-height: 1.6; letter-spacing: 0.04em; }
+
+/* ---------- 第二页：怎么来的 ---------- */
+.doc {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  gap: clamp(18px, 2.6vw, 34px);
+}
+
+.doc h2 {
+  font-size: clamp(20px, 2.9vw, 29px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+.doc p { margin: 0 0 12px; font-size: clamp(14px, 1.6vw, 16.5px); line-height: 2; color: var(--ink-dim); }
+.doc p b, .doc li b { color: var(--ink); font-weight: 600; }
+.doc .lead { font-size: clamp(15px, 1.8vw, 18px); color: var(--ink); }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(16px, 3vw, 40px); }
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: clamp(14px, 2vw, 22px);
+  background: rgba(9, 13, 22, 0.55);
+}
+.panel h3 { font-family: var(--sans); font-size: 12.5px; color: var(--accent); letter-spacing: 0.2em; margin: 0 0 10px; font-weight: 500; }
+
+ol.steps { margin: 0; padding-left: 20px; }
+ol.steps li { font-size: clamp(13.5px, 1.5vw, 15.5px); line-height: 1.95; color: var(--ink-dim); margin-bottom: 9px; }
+
+.tagline {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  border-left: 2px solid var(--line-strong);
+  padding-left: 12px;
+  line-height: 1.9;
+}
+
+details.more { border-top: 1px solid var(--line); padding-top: 12px; }
+details.more summary { font-family: var(--sans); font-size: 12.5px; color: var(--ink-faint); cursor: pointer; letter-spacing: 0.12em; }
+details.more[open] summary { color: var(--ink-dim); margin-bottom: 10px; }
+details.more p { font-size: 13.5px; line-height: 1.9; }
+
+/* ---------- 第三页：明信片 ---------- */
+.postcard-wrap { display: grid; place-items: center; width: 100%; }
+
+.postcard {
+  position: relative;
+  width: min(660px, 100%);
+  aspect-ratio: 3 / 2;
+  border-radius: 8px;
+  padding: clamp(18px, 3vw, 34px);
+  color: #2a2519;
+  font-family: var(--serif);
+  background:
+    radial-gradient(120% 120% at 12% 6%, rgba(255, 255, 255, 0.55), transparent 55%),
+    linear-gradient(160deg, #f7f1e2, #ece3cf 60%, #e4d9c0);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(120, 100, 60, 0.28);
+  overflow: hidden;
+}
+.postcard::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(120, 100, 60, 0.10) 1px, transparent 1px);
+  background-size: 5px 5px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.pc-inner { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+.pc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.pc-greet { font-size: clamp(22px, 3.4vw, 34px); letter-spacing: 0.16em; margin: 0; font-weight: 600; }
+.pc-sub { font-size: clamp(12px, 1.5vw, 14px); color: #6b6047; letter-spacing: 0.1em; margin: 8px 0 0; line-height: 1.9; }
+
+.stamp {
+  width: clamp(64px, 9vw, 84px);
+  aspect-ratio: 3 / 4;
+  border: 1px dashed rgba(90, 74, 40, 0.5);
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  color: #6b6047;
+  text-align: center;
+  line-height: 1.5;
+  padding: 4px;
+  transform: rotate(3deg);
+  background: rgba(255, 255, 255, 0.35);
+}
+.postmark {
+  position: absolute;
+  right: clamp(14px, 3vw, 30px);
+  bottom: clamp(12px, 2.4vw, 26px);
+  width: 96px; height: 96px;
+  border: 1.5px solid rgba(120, 60, 40, 0.36);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transform: rotate(-14deg);
+  color: rgba(120, 60, 40, 0.55);
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.pc-play { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.pc-right { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.bunny-hint { font-family: var(--sans); font-size: 11px; color: #6d6045; letter-spacing: 0.06em; line-height: 1.7; text-align: center; margin: 0; }
+.mooncake { width: clamp(78px, 12vw, 110px); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; transition: transform 0.12s; }
+.mooncake:active { transform: scale(0.96); }
+.mooncake-hint { font-family: var(--sans); font-size: 11.5px; color: #6d6045; letter-spacing: 0.08em; line-height: 1.8; }
+
+.bunny {
+  position: absolute;
+  width: 46px; height: 46px;
+  transition: left 1.5s cubic-bezier(0.34, 1.4, 0.5, 1), top 1.5s cubic-bezier(0.34, 1.4, 0.5, 1), transform 0.4s;
+  cursor: pointer;
+  z-index: 3;
+}
+.bunny.hop { animation: hop 0.55s ease-in-out; }
+@keyframes hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+
+.footer-note {
+  margin-top: 22px;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.12em;
+  line-height: 1.9;
+}
+
+/* ---------- 页码指示 ---------- */
+.dots { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 30; display: grid; gap: 9px; }
+.dots button {
+  width: 7px; height: 7px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.dots button.on { background: var(--moon-warm); border-color: var(--moon-warm); transform: scale(1.25); }
+
+/* ---------- 小屏 ---------- */
+@media (max-width: 760px) {
+  .p1-grid { grid-template-columns: 1fr; gap: 16px; }
+  .moon-svg { width: clamp(140px, 40vw, 190px); }
+  .date-row { gap: 8px; }
+  .date-btn { font-size: 18px; padding: 10px 12px; }
+  .toggle-btn { padding: 0 10px; font-size: 11.5px; }
+  .face { min-height: 196px; }
+  .clock { width: clamp(132px, 42vw, 172px); }
+  .clock-label { font-size: 13.5px; }
+  .cols { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .doc { gap: 16px; }
+  .doc p { line-height: 1.9; }
+  .dots { right: 8px; }
+  .page { padding: 14px 16px 18px; justify-content: flex-start; padding-top: 26px; }
+  .postcard { aspect-ratio: auto; min-height: 62dvh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+  .pages { scroll-behavior: auto; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars" aria-hidden="true"></div>
+
+<div class="dots" id="dots" role="tablist" aria-label="页">
+  <button type="button" data-goto="0" aria-label="第一页"></button>
+  <button type="button" data-goto="1" aria-label="第二页"></button>
+  <button type="button" data-goto="2" aria-label="第三页"></button>
+</div>
+
+<div class="pages" id="pages">
+
+  <!-- ============ 第一页：月相 ============ -->
+  <section class="page" id="p1">
+    <div class="p1-grid">
+      <div class="moon-stage">
+        <svg class="moon-svg" viewBox="-160 -160 320 320" role="img" aria-labelledby="moonAlt">
+          <title id="moonAlt">选定日期的月相图</title>
+          <defs>
+            <radialGradient id="litGrad" cx="36%" cy="32%" r="76%">
+              <stop offset="0%" stop-color="#fffdf6"/>
+              <stop offset="58%" stop-color="#f7f1e0"/>
+              <stop offset="100%" stop-color="#dccfa9"/>
+            </radialGradient>
+            <radialGradient id="haloGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="52%" stop-color="#efe9d8" stop-opacity="0"/>
+              <stop offset="78%" stop-color="#e6dcc0" stop-opacity="0.12"/>
+              <stop offset="100%" stop-color="#e6dcc0" stop-opacity="0"/>
+            </radialGradient>
+            <mask id="litMask">
+              <path id="litPath" fill="#fff" d=""></path>
+            </mask>
+          </defs>
+          <circle class="halo" cx="0" cy="0" r="150" fill="url(#haloGrad)"></circle>
+          <circle cx="0" cy="0" r="100" fill="#151b2b"></circle>
+          <circle cx="0" cy="0" r="100" fill="none" stroke="rgba(200,210,230,0.10)" stroke-width="0.8"></circle>
+          <g mask="url(#litMask)">
+            <circle cx="0" cy="0" r="100" fill="url(#litGrad)"></circle>
+            <g id="craters"></g>
+          </g>
+        </svg>
+        <div class="moon-caption" id="moonCaption">—</div>
+      </div>
+
+      <div class="moon-info">
+        <p class="eyebrow">月相 · Moon Phase</p>
+        <div class="date-row">
+          <button class="date-btn" id="dateBtn" type="button" aria-haspopup="dialog">
+            <span id="dateLabel">—</span>
+            <span class="phase-tag" id="phaseTag"></span>
+            <span class="caret">▾ 换个日子</span>
+          </button>
+          <button class="toggle-btn" id="toggleStats" type="button" aria-expanded="false" aria-controls="faceStats">
+            <span class="ico" aria-hidden="true">▤</span><span id="toggleText">详情</span>
+          </button>
+        </div>
+
+        <div class="face" id="faceClock">
+          <svg class="clock" id="clock" viewBox="-50 -50 100 100" role="slider" tabindex="0"
+               aria-label="调整时刻：拖动指针，也可以按左右方向键" aria-valuemin="0" aria-valuemax="23" aria-valuenow="20">
+            <circle class="clock-face" cx="0" cy="0" r="46"></circle>
+            <g id="clockTicks" aria-hidden="true"></g>
+            <line class="clock-hand" id="clockHand" x1="0" y1="6" x2="0" y2="-27"></line>
+            <circle class="clock-pin" cx="0" cy="0" r="2.8"></circle>
+          </svg>
+          <div class="clock-label"><span id="clockLabel">20:00</span><span id="clockHint">入夜</span></div>
+          <p class="clock-tip">拖动指针调时刻 · 一天一圈，拖过顶点就是第二天</p>
+        </div>
+
+        <div class="face" id="faceStats" hidden>
+          <div class="stats" id="stats"></div>
+        </div>
+
+        <p class="plain" id="plain"></p>
+      </div>
+    </div>
+
+    <div class="p1-foot">
+      <span>算法与验证过程见第二页</span>
+      <span class="scroll-cue"><span class="arrow">↓</span> 滚轮 / 滑动翻页</span>
+    </div>
+  </section>
+
+  <!-- ============ 第二页：它怎么来的 ============ -->
+  <section class="page" id="p2">
+    <div class="doc">
+      <div>
+        <p class="eyebrow">过程 · How it works</p>
+        <h2>这一页是怎么做出来的</h2>
+        <p class="lead">上面那轮月亮不是画好的图片，是<b>根据你选的日期和时刻当场算出来的</b>——圆缺、朝向、亮了多少，都跟着变。</p>
+      </div>
+
+      <div class="cols">
+        <div class="panel">
+          <h3>原理：为什么会有月相</h3>
+          <p>月亮自己不发光，我们看到的是它被太阳照亮的那一半。日、地、月摆成什么角度，决定了我们能看到多少——这就是月相。</p>
+          <p>所以算法分三步：算太阳的位置，算月亮的位置（月亮轨道是椭圆，速度时快时慢，得用几十项周期项一点点修准），两个位置相减得到夹角，再换算成照亮比例。时刻也一样：拖动那个表盘，整页数字就跟着重算一遍。</p>
+          <details class="more">
+            <summary>给技术读者的细节</summary>
+            <p>算法出自 Jean Meeus《Astronomical Algorithms》第 25 / 47 / 48 章：太阳视黄经、月亮黄经与地心距离（表 47.A，保留量级 ≥ 0.001° 的周期项）、由黄经差求相位角。时间尺度上做了 ΔT 修正（力学时 TT 与 UT 相差约 70 秒），否则朔望时刻会系统性偏晚一两分钟。</p>
+            <p>怎么知道算得对：拿公开数据对拍。<b>今年满月</b>——新华社转引紫金山天文台给出「9 月 27 日凌晨 0 时 49 分」，这里算出 <b>00:49</b>；<b>日本国立天文台</b>公布的 2026 年 8~11 月 16 个朔望时刻，这里最大偏差 <b>1 分钟</b>；<b>朔到望的间隔</b>报道给 13.90 ~ 15.61 天，这里算出 13.92 ~ 15.59 天；另有 28 天的照亮比例与 Moongiant 逐日比对，全部落在 0.7 个百分点内。</p>
+            <p>中途改过一处：第一版把"这一天"取在<b>中午 12 点</b>，中秋夜算出 97.3%，与报道说的「超过 98%」差了一截——不是算法错，是取样点错（报道说的是夜里看月亮）。改到当晚 20:00，数字就成了 98.3%。</p>
+            <p>整个页面是<b>单文件 HTML</b>，无依赖、无网络请求，双击就能开。发布前会跑一遍自带检查：算法自检、公开数据对拍、月相形状的面积校验、以及"把页面按浏览器的方式加载、真的点一遍按钮"的无头测试。</p>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h3>八卦做了什么</h3>
+          <ol class="steps">
+            <li>定下这是什么：一个能选日期看月相的小页面，分三页，滚轮一页页翻。</li>
+            <li>提要求：日期别让人打字，要能翻月翻年的日历；再加一个能拖的时针钟表；第三页要像一张明信片，月饼能一口口吃掉、兔子点一下会跑。</li>
+            <li>挑毛病：兔子的说明和邮戳叠在一起了；月饼被啃成了放射状。</li>
+          </ol>
+          <p class="tagline">代码是逍遥写的。逍遥是跑在 DSH 上的一个 AI——算法、验证、排版它自己定；八卦负责说"我想要什么"，以及指出哪里不对。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 第三页：明信片 ============ -->
+  <section class="page" id="p3">
+    <div class="postcard-wrap">
+      <div class="postcard" id="postcard">
+        <svg class="bunny" id="bunny" viewBox="0 0 48 48" aria-label="一只兔子（点一下它会跑）" role="img">
+          <ellipse cx="24" cy="30" rx="12" ry="9.5" fill="#cfc3a6"/>
+          <circle cx="15" cy="22" r="7" fill="#d8cdb2"/>
+          <ellipse cx="12" cy="11" rx="3.1" ry="8" fill="#d8cdb2" transform="rotate(-12 12 11)"/>
+          <ellipse cx="19" cy="10" rx="3.1" ry="8" fill="#d8cdb2" transform="rotate(8 19 10)"/>
+          <ellipse cx="12.4" cy="11" rx="1.4" ry="5.6" fill="#c2a89a" transform="rotate(-12 12.4 11)"/>
+          <ellipse cx="19" cy="10.4" rx="1.4" ry="5.6" fill="#c2a89a" transform="rotate(8 19 10.4)"/>
+          <circle cx="13" cy="21" r="1.3" fill="#4a4133"/>
+          <circle cx="35" cy="31" r="5" fill="#e6dcc4"/>
+        </svg>
+
+        <div class="pc-inner">
+          <div class="pc-top">
+            <div>
+              <h2 class="pc-greet">中秋快乐</h2>
+              <p class="pc-sub">愿今晚的月色，也照到你那边。<br>月饼已经替你尝过一口了。</p>
+            </div>
+            <div class="pc-right">
+              <div class="stamp">中秋<br>2026</div>
+              <p class="bunny-hint">兔子会自己走，<br>点它就跑。</p>
+            </div>
+          </div>
+
+          <div class="pc-play">
+            <div>
+              <svg class="mooncake" id="mooncake" viewBox="0 0 120 120" role="button" tabindex="0" aria-label="月饼：点一下咬一口">
+                <defs>
+                  <mask id="biteMask">
+                    <rect x="0" y="0" width="120" height="120" fill="#fff"></rect>
+                    <g id="bites" fill="#000"></g>
+                  </mask>
+                </defs>
+                <g mask="url(#biteMask)">
+                  <circle cx="60" cy="60" r="52" fill="#b98a4e"></circle>
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="#a5763c" stroke-width="2"></circle>
+                  <circle cx="60" cy="60" r="43" fill="#c99a5d"></circle>
+                  <g fill="none" stroke="#a5763c" stroke-width="2" opacity="0.75">
+                    <circle cx="60" cy="60" r="33"></circle>
+                    <circle cx="60" cy="60" r="24" stroke-dasharray="3 5"></circle>
+                  </g>
+                  <g fill="#8d6234" opacity="0.9">
+                    <circle cx="60" cy="34" r="3"></circle>
+                    <circle cx="60" cy="86" r="3"></circle>
+                    <circle cx="34" cy="60" r="3"></circle>
+                    <circle cx="86" cy="60" r="3"></circle>
+                  </g>
+                  <text x="60" y="68" text-anchor="middle" font-size="19" fill="#7d5528" font-family="serif">团圆</text>
+                </g>
+              </svg>
+              <p class="mooncake-hint" id="mooncakeHint">点一下月饼，咬一口</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="postmark">八卦&amp;逍遥<br>2026 · 中秋</div>
+      </div>
+    </div>
+    <p class="footer-note">逍遥 做给八卦 · 第三页的一口月饼和一只兔子，也是自己写的</p>
+  </section>
+
+</div>
+
+<script>
+// 月相计算（中秋月相页）——纯函数，Node 与浏览器共用。
+//
+// 算法来源：Jean Meeus《Astronomical Algorithms》(2nd ed.)
+//   · 第 25 章：太阳视黄经、日地距离
+//   · 第 47 章：月亮黄经与地心距离（表 47.A，截断到量级 ≥ 0.001°）
+//   · 第 48 章：照亮比例（相位角）
+// 精度目标（对普通读者展示用）：照亮比例误差 < 0.5 个百分点，朔望时刻误差 < 2 分钟。
+// 验证：`node 中秋/test/verify_moon.mjs`（内部不变量 + 与公开数据对拍）。
+//
+// 约定：所有"某一天的月相"都取**北京时间当天 20:00** 那一刻（赏月时刻），这样同一天在任何设备上结果一致。
+
+const RAD = Math.PI / 180;
+const J2000 = 2451545.0;
+const SYNODIC_MONTH = 29.530588853; // 平均朔望月（天）
+const EARTH_RADIUS_KM = 6378.137;
+const MOON_RADIUS_KM = 1737.4;
+const AU_KM = 149597870.7;
+
+const norm360 = (x) => ((x % 360) + 360) % 360;
+
+/**
+ * ΔT = TT − UT（秒），Espenak & Meeus 分段公式（2005–2050 段）。
+ * 天文算法要的是力学时 TT，而日历时间是 UT；2026 年两者差约 70 秒。
+ * 不做这一步，朔望时刻会系统性偏晚一分钟多（2026-09-25 与 NAOJ 对拍时抓到的就是这个）。
+ */
+function deltaTSeconds(year) {
+  if (year >= 2005 && year < 2050) {
+    const t = year - 2000;
+    return 62.92 + 0.32217 * t + 0.005589 * t * t;
+  }
+  // 区间外退回线性近似（本页只用得上 2005–2050）
+  const u = (year - 1820) / 100;
+  return -20 + 32 * u * u;
+}
+
+function dateToJD(date) {
+  return date.getTime() / 86400000 + 2440587.5;
+}
+function jdToDate(jd) {
+  return new Date(Math.round((jd - 2440587.5) * 86400000));
+}
+/** 取样点：北京时区某天 hour 点 minute 分（默认 20:00 —— "今晚抬头看月亮"的时刻）。hour 可以是小数。 */
+function beijingJD(y, m, d, hour = 20, minute = 0) {
+  const minutesFromMidnightUTC = Math.round(hour * 60 + minute) - 8 * 60;
+  return dateToJD(new Date(Date.UTC(y, m - 1, d, 0, minutesFromMidnightUTC, 0)));
+}
+/** 北京时区某天 20:00 的 Date（仅用于展示）。 */
+function beijingNightDate(y, m, d) {
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
+// ---------- 第 25 章：太阳 ----------
+
+function sunGeometry(T) {
+  const L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T * T;
+  const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
+  const Mr = M * RAD;
+  const C =
+    (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mr) +
+    (0.019993 - 0.000101 * T) * Math.sin(2 * Mr) +
+    0.000289 * Math.sin(3 * Mr);
+  const trueLon = L0 + C;
+  const omega = 125.04 - 1934.136 * T;
+  const apparentLon = norm360(trueLon - 0.00569 - 0.00478 * Math.sin(omega * RAD));
+  const e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T * T;
+  const v = (M + C) * RAD; // 真近点角
+  const distAU = (1.000001018 * (1 - e * e)) / (1 + e * Math.cos(v));
+  return { apparentLon, distKm: distAU * AU_KM };
+}
+
+// ---------- 第 47 章：月亮 ----------
+
+// 表 47.A：[D, M, M', F, Σl(1e-6 度), Σr(1e-3 km)]，按 |Σl| 降序截断到 ≥ 0.001°
+const TERMS_47A = [
+  [0, 0, 1, 0, 6288774, -20905355],
+  [2, 0, -1, 0, 1274027, -3699111],
+  [2, 0, 0, 0, 658314, -2955968],
+  [0, 0, 2, 0, 213618, -569925],
+  [0, 1, 0, 0, -185116, 48888],
+  [0, 0, 0, 2, -114332, -3149],
+  [2, 0, -2, 0, 58793, 246158],
+  [2, -1, -1, 0, 57066, -152138],
+  [2, 0, 1, 0, 53322, -170733],
+  [2, -1, 0, 0, 45758, -204586],
+  [0, 1, -1, 0, -40923, -129620],
+  [1, 0, 0, 0, -34720, 108743],
+  [0, 1, 1, 0, -30383, 104755],
+  [2, 0, 0, -2, 15327, 10321],
+  [0, 0, 1, 2, -12528, 0],
+  [0, 0, 1, -2, 10980, 79661],
+  [4, 0, -1, 0, 10675, -34782],
+  [0, 0, 3, 0, 10034, -23210],
+  [4, 0, -2, 0, 8548, -21636],
+  [2, 1, -1, 0, -7888, 24208],
+  [2, 1, 0, 0, -6766, 30824],
+  [1, 0, -1, 0, -5163, -8379],
+  [1, 1, 0, 0, 4987, -16675],
+  [2, -1, 1, 0, 4036, -12831],
+  [2, 0, 2, 0, 3994, -10445],
+  [4, 0, 0, 0, 3861, -11650],
+  [2, 0, -3, 0, 3665, 14403],
+  [0, 1, -2, 0, -2689, -7003],
+  [2, 0, -1, 2, -2602, 0],
+  [2, -1, -2, 0, 2390, 10056],
+  [1, 0, 1, 0, -2348, 6322],
+  [2, -2, 0, 0, 2236, -9884],
+  [0, 1, 2, 0, -2120, 5751],
+  [0, 2, 0, 0, -2069, 0],
+  [2, -2, -1, 0, 2048, -4950],
+  [2, 0, 1, -2, -1773, 4130],
+  [2, 0, 0, 2, -1595, 0],
+  [4, -1, -1, 0, 1215, -3958],
+  [0, 0, 2, 2, -1110, 0],
+  [3, 0, -1, 0, -892, 3258],
+  [2, 1, 1, 0, -810, 2616],
+  [4, -1, -2, 0, 759, -1897],
+  [0, 2, -1, 0, -713, -2117],
+  [2, 2, -1, 0, -700, 2354],
+  [2, 1, -2, 0, 691, 0],
+  [2, -1, 0, -2, 596, 0],
+  [4, 0, 1, 0, 549, -1423],
+  [0, 0, 4, 0, 537, -1117],
+  [4, -1, 0, 0, 520, -1571],
+  [1, 0, -2, 0, -487, -1739],
+  [2, 1, 0, -2, -399, 0],
+  [0, 0, 2, -2, -381, -4421],
+  [1, 1, 1, 0, 351, 0],
+  [3, 0, -2, 0, -340, 0],
+  [4, 0, -3, 0, 330, 0],
+  [2, -1, 2, 0, 327, 0],
+  [0, 2, 1, 0, -323, 1165],
+  [1, 1, -1, 0, 299, 0],
+  [2, 0, 3, 0, 294, 0],
+  [2, 0, -1, -2, 0, 8752],
+];
+
+function moonGeometry(T) {
+  const Lp = 218.3164477 + 481267.88123421 * T - 0.0015786 * T * T + (T ** 3) / 538841 - (T ** 4) / 65194000;
+  const D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T * T + (T ** 3) / 545868 - (T ** 4) / 113065000;
+  const M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T * T + (T ** 3) / 24490000;
+  const Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T * T + (T ** 3) / 69699 - (T ** 4) / 14712000;
+  const F = 93.272095 + 483202.0175233 * T - 0.0036539 * T * T - (T ** 3) / 3526000 + (T ** 4) / 863310000;
+  const A1 = 119.75 + 131.849 * T;
+  const A2 = 53.09 + 479264.29 * T;
+  const E = 1 - 0.002516 * T - 0.0000074 * T * T;
+
+  let sumL = 0;
+  let sumR = 0;
+  for (const [d, m, mp, f, sl, sr] of TERMS_47A) {
+    const arg = (d * D + m * M + mp * Mp + f * F) * RAD;
+    const ecc = Math.abs(m) === 0 ? 1 : Math.abs(m) === 1 ? E : E * E;
+    sumL += sl * ecc * Math.sin(arg);
+    sumR += sr * ecc * Math.cos(arg);
+  }
+  // 金星、木星摄动与地球扁率附加项
+  sumL += 3958 * Math.sin(A1 * RAD) + 1962 * Math.sin((Lp - F) * RAD) + 318 * Math.sin(A2 * RAD);
+
+  return { lon: norm360(Lp + sumL / 1e6), distKm: 385000.56 + sumR / 1000 };
+}
+
+// ---------- 第 48 章：照亮比例 ----------
+
+/** 黄经差（月 − 日）与距离 → 相位角（度）与照亮比例。 */
+function illumFromElongation(elongDeg, sunDistKm, moonDistKm) {
+  const psi = elongDeg * RAD;
+  const sun = sunDistKm;
+  const moon = moonDistKm;
+  const phaseAngle = Math.atan2(sun * Math.sin(psi), moon - sun * Math.cos(psi)) / RAD; // 0° = 满月, 180° = 新月
+  const illum = (1 + Math.cos(phaseAngle * RAD)) / 2;
+  return { phaseAngle, illum };
+}
+
+// ---------- 对外：某时刻的月相 ----------
+
+/** 给定儒略日（UT），返回该时刻的月相数据。 */
+function moonAtJD(jd) {
+  const yearGuess = 2000 + (jd - J2000) / 365.25;
+  const jdTT = jd + deltaTSeconds(yearGuess) / 86400; // UT → TT
+  const T = (jdTT - J2000) / 36525;
+  const sun = sunGeometry(T);
+  const moon = moonGeometry(T);
+  const elong = norm360(moon.lon - sun.apparentLon);
+  const { phaseAngle, illum } = illumFromElongation(elong, sun.distKm, moon.distKm);
+  const angularDiameter = 2 * Math.atan(MOON_RADIUS_KM / moon.distKm) / RAD * 60; // 角分
+  return {
+    jd,
+    date: jdToDate(jd),
+    elongation: elong,
+    phaseAngle,
+    illumination: illum,
+    moonLon: moon.lon,
+    sunLon: sun.apparentLon,
+    moonDistKm: moon.distKm,
+    angularDiameter,
+    ageDays: (elong / 360) * SYNODIC_MONTH, // 近似月龄（见 moonInfo 里的精确版）
+    waxing: elong < 180,
+  };
+}
+
+/** 求解「黄经差 = target 度」的时刻（向前搜）。返回儒略日。 */
+function solvePhaseJD(jdStart, targetDeg) {
+  const f = (jd) => norm360(moonAtJD(jd).elongation - targetDeg);
+  const step = 0.5;
+  let a = jdStart;
+  let fa = f(a);
+  // 先确保越过目标角（避免起点正落在零点附近时误判）
+  let b = a;
+  for (let i = 0; i < 80; i++) {
+    b = a + step;
+    const fb = f(b);
+    if (fb < fa) break; // norm360 出现回绕 → 区间内跨过
+    a = b;
+    fa = fb;
+  }
+  let lo = a;
+  let hi = b;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) > 180) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** 月龄的精确版：上一个朔（新月）到 jd 的天数（0 ~ 29.53）。 */
+function moonAgeDays(jd) {
+  let t = solvePhaseJD(jd - SYNODIC_MONTH - 3, 0);
+  // 若 t 之后还有一次朔仍落在 jd 之前，就一直推进到最近的那次
+  for (;;) {
+    const next = solvePhaseJD(t + 1, 0);
+    if (next >= jd) break;
+    t = next;
+  }
+  return jd - t;
+}
+
+/** 八相名称（中文）。 */
+function phaseName(elong) {
+  const e = norm360(elong);
+  if (e < 11.25 || e >= 348.75) return '新月';
+  if (e < 78.75) return '娥眉月';
+  if (e < 101.25) return '上弦月';
+  if (e < 168.75) return '盈凸月';
+  if (e < 191.25) return '满月';
+  if (e < 258.75) return '亏凸月';
+  if (e < 281.25) return '下弦月';
+  return '残月';
+}
+
+/** 某一天某个时刻（北京时间）的完整月相信息——页面主入口。 */
+function moonInfo(y, m, d, hour = 20, minute = 0) {
+  const jd = beijingJD(y, m, d, hour, minute);
+  const base = moonAtJD(jd);
+  const age = moonAgeDays(jd);
+  const nextNewJD = solvePhaseJD(jd, 0);
+  const nextFullJD = solvePhaseJD(jd, 180);
+  return {
+    ...base,
+    date: { y, m, d },
+    hour,
+    minute,
+    sample: jdToDate(jd), // 本页数字取自哪一时刻（北京时间）
+    ageDays: age,
+    phaseName: phaseName(base.elongation),
+    nextNew: jdToDate(nextNewJD),
+    nextFull: jdToDate(nextFullJD),
+    // 期望的月龄（用于与"上一个朔"的精确值对照）
+    ageApprox: (base.elongation / 360) * SYNODIC_MONTH,
+  };
+}
+
+const __internal = { sunGeometry, moonGeometry, illumFromElongation, TERMS_47A };
+
+
+
+// 页面纯逻辑（无 DOM）：日历网格、月相路径、文案。
+// 与渲染层分开，便于在 Node 里直接测试（见 中秋/test/verify_logic.mjs）。
+
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/**
+ * 日历网格（周日开头，固定 6 行 = 42 格）。
+ * 返回 [{ y, m, d, inMonth }]，含上月/下月的补位日。
+ */
+function calendarGrid(y, m) {
+  const startDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const prevMonth = m === 1 ? 12 : m - 1;
+  const prevYear = m === 1 ? y - 1 : y;
+  const daysInPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  const nextMonth = m === 12 ? 1 : m + 1;
+  const nextYear = m === 12 ? y + 1 : y;
+
+  const cells = [];
+  for (let i = 0; i < 42; i++) {
+    const offset = i - startDow;
+    if (offset < 0) {
+      cells.push({ y: prevYear, m: prevMonth, d: daysInPrev + offset + 1, inMonth: false });
+    } else if (offset < daysInMonth) {
+      cells.push({ y, m, d: offset + 1, inMonth: true });
+    } else {
+      cells.push({ y: nextYear, m: nextMonth, d: offset - daysInMonth + 1, inMonth: false });
+    }
+  }
+  return cells;
+}
+
+/** 月份加减（用于日历翻页），返回 [y, m]。 */
+function shiftMonth(y, m, delta) {
+  const total = y * 12 + (m - 1) + delta;
+  return [Math.floor(total / 12), (total % 12 + 12) % 12 + 1];
+}
+
+/**
+ * 人工核实过的固定节日（只列查证过的；没查证的一律不标，也不假装会算农历）。
+ * 2026 中秋 = 9 月 25 日，来源：新华社 2026-09-21《今年中秋挺特别：十五的月亮十七圆》
+ *   https://www.news.cn/politics/20260921/85b864161ccf4fd792f8a7e9852e71a9/c.html
+ */
+const FIXED_FESTIVALS = {
+  '2026-09-25': '中秋',
+};
+
+function festivalOf(y, m, d) {
+  return FIXED_FESTIVALS[`${y}-${pad2(m)}-${pad2(d)}`] || null;
+}
+
+/** Date（UTC 瞬时）→ 北京时间字符串 "2026-09-27 00:50"。 */
+function formatBeijing(date) {
+  const t = new Date(date.getTime() + 8 * 3600 * 1000);
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())} ${pad2(t.getUTCHours())}:${pad2(t.getUTCMinutes())}`;
+}
+
+/** 只要 "MM-DD HH:mm"。 */
+function formatShort(date) {
+  return formatBeijing(date).slice(5);
+}
+
+/**
+ * 月相轮廓 path（供 SVG）。
+ * 亮区 = 外缘半圆（亮的那一侧）+ 交界椭圆弧；rx 带符号可同时覆盖月牙/凸月/满月。
+ */
+function moonPathD(illumination, waxing, R, cx = 0, cy = 0, steps = 48) {
+  const s = waxing ? 1 : -1;
+  const rx = s * R * (1 - 2 * illumination);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI;
+    pts.push([cx + s * R * Math.sin(t), cy - R * Math.cos(t)]);
+  }
+  for (let i = steps; i >= 0; i--) {
+    const t = (i / steps) * Math.PI;
+    pts.push([cx + rx * Math.sin(t), cy - R * Math.cos(t)]);
+  }
+  return 'M' + pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join('L') + 'Z';
+}
+
+/** 环形山（固定位置，用半径比例表示；只在亮面显示由 mask 负责）。 */
+const CRATERS = [
+  { x: -0.30, y: -0.22, r: 0.13, o: 0.10 },
+  { x: 0.18, y: -0.38, r: 0.08, o: 0.09 },
+  { x: 0.34, y: 0.12, r: 0.16, o: 0.08 },
+  { x: -0.12, y: 0.30, r: 0.11, o: 0.09 },
+  { x: 0.02, y: -0.05, r: 0.20, o: 0.05 },
+  { x: -0.44, y: 0.16, r: 0.07, o: 0.08 },
+  { x: 0.22, y: 0.44, r: 0.06, o: 0.07 },
+];
+
+/** 地月平均距离（km），用于"比平均近/远"的人话。 */
+const MEAN_MOON_DISTANCE_KM = 384400;
+
+/** 一句话说清今晚的月亮（普通读者口径）。 */
+function plainSentence(info) {
+  const name = info.phaseName;
+  const daysToFull = (info.nextFull.getTime() - info.sample.getTime()) / 86400000;
+  const daysToNew = (info.nextNew.getTime() - info.sample.getTime()) / 86400000;
+  const d = (n) => (n < 1 ? '不到一天' : n < 2 ? '一天多' : `${Math.round(n)} 天`);
+
+  switch (name) {
+    case '新月':
+      return '今晚几乎看不见月亮——它和太阳同升同落，整夜都在地平线附近。';
+    case '娥眉月':
+      return `一弯细月挂在西边天空，日落后不久就落下了。再过 ${d(daysToFull)}，它就会圆。`;
+    case '上弦月':
+      return `月亮的右半边亮着，正午升起、午夜前后落下。距满月还有 ${d(daysToFull)}。`;
+    case '盈凸月':
+      return daysToFull < 1
+        ? '月亮已经接近圆满，最圆的时刻就在今天前后。'
+        : `月亮一天比一天圆，最圆的时刻在 ${d(daysToFull)}之后。`;
+    case '满月':
+      return '今晚是满月：太阳落山时它升起，整夜都在天上。';
+    case '亏凸月':
+      return '月亮开始缺了——最圆的时刻刚刚过去，它现在每晚升起得晚一点。';
+    case '下弦月':
+      return `月亮的左半边亮着，后半夜才升起，天亮时还挂在天上。距新月还有 ${d(daysToNew)}。`;
+    default:
+      return `一弯残月出现在黎明前的东方。再有 ${d(daysToNew)}就是新月，月亮会"消失"一两天。`;
+  }
+}
+
+/** 地月距离的人话。 */
+function distanceNote(km) {
+  const diff = (km - MEAN_MOON_DISTANCE_KM) / MEAN_MOON_DISTANCE_KM;
+  const pct = Math.abs(diff * 100).toFixed(1);
+  if (Math.abs(diff) < 0.005) return '接近平均距离';
+  return diff > 0 ? `比平均远 ${pct}%，看着略小` : `比平均近 ${pct}%，看着略大`;
+}
+
+/** 月龄的人话。 */
+function ageNote(ageDays) {
+  return `${ageDays.toFixed(1)} 天（上一次新月到现在）`;
+}
+
+// ---------------- 时刻：日期加减与表盘角度 ----------------
+
+/** 日期加减若干天（自动跨月跨年）。 */
+function stepDay(y, m, d, delta) {
+  const t = new Date(Date.UTC(y, m - 1, d + delta));
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+}
+
+/** 24 小时表盘：小时 → 从正上方起顺时针的角度。 */
+function hourToAngle(hour) {
+  return (((hour % 24) + 24) % 24) / 24 * 360;
+}
+
+/** 24 小时表盘：角度 → 小时（0~24 浮点）。 */
+function angleToHour(angle) {
+  return ((((angle % 360) + 360) % 360) / 360) * 24;
+}
+
+/** 把小时归一化到 [0,24)。 */
+function normalizeHour(hour) {
+  return ((hour % 24) + 24) % 24;
+}
+
+/**
+ * 拖动时针跨过 0 点时，日期该往前还是往后走一天。
+ * 表盘一圈 = 24 小时，所以差值超过半圈就说明是跨过 0 点而不是走了那么多小时。
+ */
+function dayShiftForDrag(oldHour, newHour) {
+  const diff = newHour - oldHour;
+  if (diff < -12) return 1; // 顺时针越过 0 点 → 次日
+  if (diff > 12) return -1; // 逆时针越过 0 点 → 前一日
+  return 0;
+}
+
+/** 时刻文本 "20:00"。 */
+function formatClock(hour, minute = 0) {
+  const h = Math.floor(normalizeHour(hour));
+  return `${pad2(h)}:${pad2(Math.round(minute))}`;
+}
+
+/** 一天里的一句时间说明（表盘旁边的小字）。 */
+function timeHint(hour) {
+  const h = normalizeHour(hour);
+  if (h < 5) return '后半夜';
+  if (h < 8) return '黎明前';
+  if (h < 11) return '清晨';
+  if (h < 14) return '正午';
+  if (h < 17) return '午后';
+  if (h < 19) return '日落前后';
+  if (h < 22) return '入夜';
+  return '夜深';
+}
+
+
+// 页面渲染与交互（依赖同文件内拼接进来的 moon.mjs / logic.mjs）
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  // 今天（按北京时间判断，和页面口径一致）
+  const nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
+  const TODAY = { y: nowBJ.getUTCFullYear(), m: nowBJ.getUTCMonth() + 1, d: nowBJ.getUTCDate() };
+  const DEFAULT_HOUR = 20; // 默认取"入夜看月亮"的时刻
+
+  const state = { date: { ...TODAY }, hour: DEFAULT_HOUR };
+  const view = { mode: 'days', y: TODAY.y, m: TODAY.m, yearBase: Math.floor(TODAY.y / 12) * 12 };
+
+  // ---------------- 星野 ----------------
+  (function stars() {
+    const box = $('stars');
+    let html = '';
+    for (let i = 0; i < 90; i++) {
+      const x = Math.random() * 100;
+      const y = Math.random() * 100;
+      const s = Math.random() < 0.82 ? 1 : 1.8;
+      const delay = (Math.random() * 6).toFixed(2);
+      const dur = (4 + Math.random() * 6).toFixed(2);
+      html += `<i style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;width:${s}px;height:${s}px;animation-delay:${delay}s;animation-duration:${dur}s"></i>`;
+    }
+    box.innerHTML = html;
+  })();
+
+  // ---------------- 月相渲染 ----------------
+  function renderMoon(info) {
+    $('litPath').setAttribute('d', moonPathD(info.illumination, info.waxing, 100));
+    $('craters').innerHTML = CRATERS.map(
+      (c) => `<circle cx="${(c.x * 100).toFixed(1)}" cy="${(c.y * 100).toFixed(1)}" r="${(c.r * 100).toFixed(1)}" fill="rgba(126,110,74,${c.o})"></circle>`
+    ).join('');
+    $('moonCaption').textContent =
+      `${info.phaseName} · 照亮 ${(info.illumination * 100).toFixed(1)}% · 月龄 ${info.ageDays.toFixed(1)} 天`;
+  }
+
+  function renderStats(info) {
+    const illumPct = (info.illumination * 100).toFixed(1);
+    const rows = [
+      `<div class="stat wide">
+         <div class="k">照亮比例</div>
+         <div class="v">${illumPct}<span class="unit">%</span><span class="sub">月球正面被太阳照亮的部分</span></div>
+         <div class="illum-bar"><i style="width:${illumPct}%"></i></div>
+       </div>`,
+      `<div class="stat"><div class="k">月龄</div><div class="v">${info.ageDays.toFixed(1)}<span class="unit">天</span></div></div>`,
+      `<div class="stat"><div class="k">视直径</div><div class="v">${info.angularDiameter.toFixed(1)}<span class="unit">角分</span></div></div>`,
+      `<div class="stat"><div class="k">下次满月</div><div class="v">${formatShort(info.nextFull)}</div></div>`,
+      `<div class="stat"><div class="k">下次新月</div><div class="v">${formatShort(info.nextNew)}</div></div>`,
+      `<div class="stat wide"><div class="k">地月距离</div>
+         <div class="v">${(info.moonDistKm / 10000).toFixed(1)}<span class="unit">万公里</span><span class="sub">${distanceNote(info.moonDistKm)}</span></div>
+       </div>`,
+    ];
+    $('stats').innerHTML = rows.join('');
+  }
+
+  function render() {
+    const { y, m, d } = state.date;
+    const info = moonInfo(y, m, d, state.hour);
+    $('dateLabel').textContent = `${y} 年 ${m} 月 ${d} 日`;
+    $('phaseTag').textContent = info.phaseName;
+    $('clockLabel').textContent = formatClock(state.hour);
+    $('clockHint').textContent = timeHint(state.hour);
+    const clock = $('clock');
+    if (clock) clock.setAttribute('aria-valuenow', String(state.hour));
+    $('clockHand').setAttribute('transform', `rotate(${hourToAngle(state.hour).toFixed(2)} 0 0)`);
+    renderMoon(info);
+    renderStats(info);
+    $('plain').textContent = plainSentence(info);
+    renderDots();
+  }
+
+  // ---------------- 表盘 / 详情 切换 ----------------
+  (function detailToggle() {
+    const btn = $('toggleStats');
+    const faceClock = $('faceClock');
+    const faceStats = $('faceStats');
+    const label = $('toggleText');
+
+    function apply(showStats) {
+      faceClock.hidden = showStats;
+      faceStats.hidden = !showStats;
+      label.textContent = showStats ? '收起' : '详情';
+      btn.setAttribute('aria-expanded', String(showStats));
+    }
+
+    btn.addEventListener('click', () => apply(faceStats.hidden));
+    apply(false);
+  })();
+
+  // ---------------- 时针钟表（一天一圈 = 24 小时） ----------------
+  (function clock() {
+    // 刻度：每 1 小时一根，每 6 小时一根长的
+    let ticks = '';
+    for (let i = 0; i < 24; i++) {
+      const major = i % 6 === 0;
+      const rad = (i / 24) * 2 * Math.PI;
+      const r1 = major ? 35.5 : 38.5;
+      const r2 = 42;
+      const x1 = (Math.sin(rad) * r1).toFixed(2);
+      const y1 = (-Math.cos(rad) * r1).toFixed(2);
+      const x2 = (Math.sin(rad) * r2).toFixed(2);
+      const y2 = (-Math.cos(rad) * r2).toFixed(2);
+      ticks += `<line class="${major ? 'major' : ''}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"></line>`;
+    }
+    $('clockTicks').innerHTML = ticks;
+
+    const svg = $('clock');
+    const hand = $('clockHand');
+
+    /** 把小时设成 h（整点），跨过 0 点就把日期加减一天。 */
+    function setHour(h) {
+      const target = normalizeHour(Math.round(h));
+      const shift = dayShiftForDrag(state.hour, target);
+      if (shift) state.date = stepDay(state.date.y, state.date.m, state.date.d, shift);
+      if (target !== state.hour || shift) {
+        state.hour = target;
+        render();
+      }
+      hand.setAttribute('transform', `rotate(${hourToAngle(state.hour).toFixed(2)} 0 0)`);
+    }
+
+    /** 指针位置 → 小时（顶部为 0 点，顺时针）。 */
+    function hourFromPointer(clientX, clientY) {
+      const rect = svg.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const angle = (Math.atan2(clientX - cx, -(clientY - cy)) * 180) / Math.PI;
+      return angleToHour(angle);
+    }
+
+    let dragging = false;
+    svg.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (_) { /* 桩环境没有这个 API */ }
+      setHour(hourFromPointer(e.clientX, e.clientY));
+      e.preventDefault();
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      setHour(hourFromPointer(e.clientX, e.clientY));
+      e.preventDefault();
+    });
+    const stop = () => { dragging = false; };
+    svg.addEventListener('pointerup', stop);
+    svg.addEventListener('pointercancel', stop);
+
+    svg.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { setHour(state.hour + 1); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { setHour(state.hour - 1); e.preventDefault(); }
+      else if (e.key === 'Home') { setHour(DEFAULT_HOUR); e.preventDefault(); }
+    });
+  })();
+
+  // ---------------- 日历 ----------------
+  const calBackdrop = document.createElement('div');
+  calBackdrop.className = 'cal-backdrop';
+  calBackdrop.innerHTML = `
+    <div class="cal" role="dialog" aria-modal="true" aria-label="选择日期">
+      <div class="cal-head">
+        <button class="nav" type="button" data-nav="-1" aria-label="上一页">‹</button>
+        <button class="label" type="button" id="calLabel">—</button>
+        <button class="nav" type="button" data-nav="1" aria-label="下一页">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-foot">
+        <button type="button" id="calToday">回到今天</button>
+        <button type="button" id="calFestival">今年中秋</button>
+      </div>
+      <p class="cal-note" id="calNote">日期按北京时间。带小圆点的日子是中秋；时刻用页面上的表盘拖。</p>
+    </div>`;
+  document.body.appendChild(calBackdrop);
+
+  const calGrid = calBackdrop.querySelector('#calGrid');
+  const calLabel = calBackdrop.querySelector('#calLabel');
+
+  function festivalInYear(y) {
+    const key = Object.keys(FIXED_FESTIVALS).find((k) => k.startsWith(`${y}-`));
+    if (!key) return null;
+    const [fy, fm, fd] = key.split('-').map(Number);
+    return { y: fy, m: fm, d: fd, name: FIXED_FESTIVALS[key] };
+  }
+
+  function renderCalendar() {
+    calGrid.classList.remove('months', 'years');
+
+    if (view.mode === 'days') {
+      calLabel.textContent = `${view.y} 年 ${view.m} 月`;
+      const todayKey = `${TODAY.y}-${TODAY.m}-${TODAY.d}`;
+      const selKey = `${state.date.y}-${state.date.m}-${state.date.d}`;
+      const cells = calendarGrid(view.y, view.m).map((c) => {
+        const cls = ['cal-cell'];
+        if (!c.inMonth) cls.push('dim');
+        if (`${c.y}-${c.m}-${c.d}` === todayKey) cls.push('today');
+        if (`${c.y}-${c.m}-${c.d}` === selKey) cls.push('sel');
+        if (festivalOf(c.y, c.m, c.d)) cls.push('festival');
+        return `<button type="button" class="${cls.join(' ')}" data-y="${c.y}" data-m="${c.m}" data-d="${c.d}">${c.d}</button>`;
+      });
+      calGrid.innerHTML = WEEKDAYS.map((w) => `<div class="wd">${w}</div>`).join('') + cells.join('');
+      return;
+    }
+
+    if (view.mode === 'months') {
+      calLabel.textContent = `${view.y} 年`;
+      calGrid.classList.add('months');
+      calGrid.innerHTML = Array.from({ length: 12 }, (_, i) => {
+        const mm = i + 1;
+        const cls = ['cal-cell'];
+        if (view.y === TODAY.y && mm === TODAY.m) cls.push('today');
+        if (view.y === state.date.y && mm === state.date.m) cls.push('sel');
+        return `<button type="button" class="${cls.join(' ')}" data-month="${mm}">${mm} 月</button>`;
+      }).join('');
+      return;
+    }
+
+    calLabel.textContent = `${view.yearBase} – ${view.yearBase + 11}`;
+    calGrid.classList.add('years');
+    calGrid.innerHTML = Array.from({ length: 12 }, (_, i) => {
+      const yy = view.yearBase + i;
+      const cls = ['cal-cell'];
+      if (yy === TODAY.y) cls.push('today');
+      if (yy === state.date.y) cls.push('sel');
+      return `<button type="button" class="${cls.join(' ')}" data-year="${yy}">${yy}</button>`;
+    }).join('');
+  }
+
+  function openCal() {
+    view.mode = 'days';
+    view.y = state.date.y;
+    view.m = state.date.m;
+    view.yearBase = Math.floor(state.date.y / 12) * 12;
+    renderCalendar();
+    const fest = festivalInYear(TODAY.y);
+    calBackdrop.querySelector('#calFestival').style.display = fest ? '' : 'none';
+    calBackdrop.classList.add('open');
+  }
+  function closeCal() {
+    calBackdrop.classList.remove('open');
+  }
+
+  $('dateBtn').addEventListener('click', openCal);
+  calBackdrop.addEventListener('click', (e) => {
+    if (e.target === calBackdrop) closeCal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCal();
+  });
+
+  calBackdrop.querySelectorAll('.nav').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dir = Number(btn.dataset.nav);
+      if (view.mode === 'days') {
+        const [ny, nm] = shiftMonth(view.y, view.m, dir);
+        view.y = ny;
+        view.m = nm;
+      } else if (view.mode === 'months') {
+        view.y += dir;
+      } else {
+        view.yearBase += dir * 12;
+      }
+      renderCalendar();
+    });
+  });
+
+  calLabel.addEventListener('click', () => {
+    if (view.mode === 'days') {
+      view.mode = 'months';
+    } else if (view.mode === 'months') {
+      view.mode = 'years';
+      view.yearBase = Math.floor(view.y / 12) * 12;
+    }
+    renderCalendar();
+  });
+
+  calGrid.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.d !== undefined) {
+      const y = Number(btn.dataset.y);
+      const m = Number(btn.dataset.m);
+      const d = Number(btn.dataset.d);
+      state.date = { y, m, d };
+      view.y = y;
+      view.m = m;
+      render();
+      closeCal();
+      return;
+    }
+    if (btn.dataset.month) {
+      view.m = Number(btn.dataset.month);
+      view.mode = 'days';
+      renderCalendar();
+      return;
+    }
+    if (btn.dataset.year) {
+      view.y = Number(btn.dataset.year);
+      view.mode = 'months';
+      renderCalendar();
+    }
+  });
+
+  calBackdrop.querySelector('#calToday').addEventListener('click', () => {
+    state.date = { ...TODAY };
+    view.y = TODAY.y;
+    view.m = TODAY.m;
+    render();
+    closeCal();
+  });
+
+  calBackdrop.querySelector('#calFestival').addEventListener('click', () => {
+    const fest = festivalInYear(TODAY.y);
+    if (!fest) return;
+    state.date = { y: fest.y, m: fest.m, d: fest.d };
+    view.y = fest.y;
+    view.m = fest.m;
+    render();
+    closeCal();
+  });
+
+  // ---------------- 折叠区展开后，把新内容带进视野 ----------------
+  // 每页固定一屏高、内容超高时页内滚动，所以展开后要主动滚一下，
+  // 否则读者以为"点了没反应"。
+  document.querySelectorAll('details.more').forEach((d) => {
+    d.addEventListener('toggle', () => {
+      if (d.open && typeof d.scrollIntoView === 'function') {
+        d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  });
+
+  // ---------------- 月饼 ----------------
+  (function mooncake() {
+    const svg = $('mooncake');
+    const bites = $('bites');
+    const hint = $('mooncakeHint');
+    const MAX = 8;
+    const R = 52; // 月饼半径（viewBox 单位）
+    let count = 0;
+
+    function addBite(cx, cy, r) {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', cx.toFixed(1));
+      c.setAttribute('cy', cy.toFixed(1));
+      c.setAttribute('r', r.toFixed(1));
+      bites.appendChild(c);
+    }
+
+    function bite() {
+      if (count >= MAX) {
+        // 再来一个
+        count = 0;
+        bites.innerHTML = '';
+        hint.textContent = '点一下月饼，咬一口';
+        return;
+      }
+      count++;
+      if (count < MAX) {
+        // 前 7 口沿边缘均匀分布：咬痕够大、彼此重叠，把边缘啃干净
+        const angle = -Math.PI / 2 + (count - 1) * ((Math.PI * 2) / (MAX - 1)) + (Math.random() - 0.5) * 0.1;
+        addBite(60 + Math.cos(angle) * 45, 60 + Math.sin(angle) * 45, 26 + Math.random() * 2);
+      } else {
+        // 第 8 口：吃中间
+        addBite(60, 60, 34);
+      }
+      if (count >= MAX) hint.textContent = '吃完了——中秋快乐！';
+      else if (count >= 5) hint.textContent = `还剩 ${MAX - count} 口`;
+      else hint.textContent = `第 ${count} 口`;
+    }
+
+    svg.addEventListener('click', bite);
+    svg.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        bite();
+      }
+    });
+  })();
+
+  // ---------------- 兔子 ----------------
+  (function bunny() {
+    const el = $('bunny');
+    const card = $('postcard');
+
+    function place(fast) {
+      const cw = card.clientWidth;
+      const ch = card.clientHeight;
+      const w = el.offsetWidth || 46;
+      const h = el.offsetHeight || 46;
+      const x = 8 + Math.random() * Math.max(10, cw - w - 16);
+      const y = 8 + Math.random() * Math.max(10, ch - h - 16);
+      el.style.transitionDuration = fast ? '0.45s' : '1.6s';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.classList.remove('hop');
+      void el.offsetWidth;
+      el.classList.add('hop');
+    }
+
+    el.style.left = '12px';
+    el.style.top = '12px';
+    el.addEventListener('click', () => place(true));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') place(true);
+    });
+    setInterval(() => {
+      if (Math.random() < 0.55) place(false);
+    }, 2800);
+  })();
+
+  // ---------------- 页码 ----------------
+  const pagesEl = $('pages');
+  const dots = Array.from(document.querySelectorAll('.dots button'));
+
+  function renderDots() {
+    const i = Math.round(pagesEl.scrollTop / Math.max(1, pagesEl.clientHeight));
+    dots.forEach((d, k) => d.classList.toggle('on', k === i));
+  }
+
+  dots.forEach((d) => {
+    d.addEventListener('click', () => {
+      const k = Number(d.dataset.goto);
+      pagesEl.scrollTo({ top: k * pagesEl.clientHeight, behavior: 'smooth' });
+    });
+  });
+
+  pagesEl.addEventListener('scroll', renderDots, { passive: true });
+  window.addEventListener('resize', renderDots);
+
+  // ---------------- 启动 ----------------
+  render();
+})();
+
+</script>
+</body>
+</html>
